@@ -1,177 +1,52 @@
-# PI4-Site-de-Integra-o-Sistemas-Voz-
-Um Site com integração de API React 
-npm install gh-pages --save-dev
-"homepage": "https://<TatianaLissa>.github.io/<PI4-Site-de- Integração-Sistemas-Voz>",
-    "scripts": {
-      "predeploy": "npm run build",
-      "deploy": "gh-pages -d build"
-    }
-    npm run deploy
+import spacy
+import pandas as pd
+import unicodedata
+import nltk
 
-    import React, { useState, useRef, useCallback } from 'react';
+# Download dos recursos necessários do NLTK e SpaCy (executar uma vez)
+nltk.download('punkt')
+# Para SpaCy, baixe o modelo português na linha de comando: python -m spacy download pt_core_news_sm
 
-// Hook useTextToSpeech que integra a síntese de fala e controle de fonemas
-export function useTextToSpeech(text) {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [volume, setVolume] = useState(1);
-  const [rate, setRate] = useState(1);
-  const [phonemes, setPhonemes] = useState(null); // Estado para armazenar fonemas
-  const utteranceRef = useRef(null);
+# Função para remover acentos de uma string
+def remover_acentos(texto):
+    texto = unicodedata.normalize('NFD', texto)
+    texto = ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
+    return texto
 
-  // Função simulada para chamar um serviço externo para conversão texto-para-fonema
-  const fetchPhonemes = useCallback(async (text) => {
-    // Simulação: chamada a API REST fictícia
-    // Aqui deve substituir para chamada real via fetch ou axios
-    const fakeApiResponse = {
-      phonemes: "pʰ oʊ n iː m z" // exemplo fictício
-    };
-    setPhonemes(fakeApiResponse.phonemes);
-    return fakeApiResponse.phonemes;
-  }, []);
+# Carrega modelo SpaCy para português
+nlp = spacy.load("pt_core_news_sm")
 
-  const speak = useCallback(async () => {
-    if (!text) return;
+# Exemplo de criação de um DataFrame Pandas com nomes próprios acentuados
+# Pode-se carregar de arquivo CSV na prática
+dados_nomes = {
+    "nome": [
+        "Maria", "João", "Páulu", "Albértu", "Ãna", "Rafaéu",
+        "Fernãnda", "Lúcas", "Marcélu", "José", "Mariãna", "Carlos",
+        "Beatríz", "Pêdru", "Joãna", "André", "Simõni", "Gabriéu",
+        "Cárla", "Daniéu", " María di Fátima"
+    ]
+}
+df_nomes = pd.DataFrame(dados_nomes)
 
-    // Obter fonemas do serviço externo
-    await fetchPhonemes(text);
-
-    if (utteranceRef.current) {
-      window.speechSynthesis.cancel();
-      utteranceRef.current = null;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.volume = volume;
-    utterance.rate = rate;
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      setIsPaused(false);
-    };
-    utterance.onpause = () => setIsPaused(true);
-    utterance.onresume = () => setIsPaused(false);
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-      setIsPaused(false);
-    };
-
-    utterance.onboundary = event => {
-      console.log(`Boundary event: charIndex=${event.charIndex}, name=${event.name}`);
-    };
-
-    utteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-  }, [text, volume, rate, fetchPhonemes]);
-
-  const pause = useCallback(() => {
-    if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-      window.speechSynthesis.pause();
-      setIsPaused(true);
-    }
-  }, []);
-
-  const resume = useCallback(() => {
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-      setIsPaused(false);
-    }
-  }, []);
-
-  const stop = useCallback(() => {
-    window.speechSynthesis.cancel();
-    utteranceRef.current = null;
-    setIsSpeaking(false);
-    setIsPaused(false);
-  }, []);
-
-  return {
-    isSpeaking,
-    isPaused,
-    volume,
-    setVolume,
-    rate,
-    setRate,
-    phonemes, // retornando fonemas
-    speak,
-    pause,
-    resume,
-    stop
-  };
+# Criar dicionário para consulta rápida: chave = nome sem acento em minúsculas, valor = nome acentuado
+dicionario_nomes = {
+    remover_acentos(nome.lower()): nome for nome in df_nomes["nome"]
 }
 
-// Componente TextToSpeechControl que renderiza os controles e mostra fonemas
-export function TextToSpeechControl({ text }) {
-  const {
-    isSpeaking,
-    isPaused,
-    volume,
-    setVolume,
-    rate,
-    setRate,
-    phonemes,
-    speak,
-    pause,
-    resume,
-    stop
-  } = useTextToSpeech(text);
+def recuperar_acentos(texto):
+    doc = nlp(texto)
+    tokens_corrigidos = []
+    for token in doc:
+        if token.ent_type_ == "PER":  # Entidade do tipo Pessoa
+            chave = remover_acentos(token.text.lower())
+            nome_corrigido = dicionario_nomes.get(chave, token.text)
+            tokens_corrigidos.append(nome_corrigido)
+        else:
+            tokens_corrigidos.append(token.text)
+    return " ".join(tokens_corrigidos)
 
-  const handlePlayPause = () => {
-    if (isSpeaking) {
-      if (isPaused) {
-        resume();
-      } else {
-        pause();
-      }
-    } else {
-      speak();
-    }
-  };
-
-  return (
-    <div>
-      <button onClick={handlePlayPause}>
-        {isSpeaking ? (isPaused ? 'Retomar' : 'Pausar') : 'Tocar'}
-      </button>
-      <button onClick={stop} disabled={!isSpeaking}>
-        Parar
-      </button>
-      <div>
-        <label>
-          Volume: {Math.round(volume * 100)}%
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={e => setVolume(Number(e.target.value))}
-            disabled={isSpeaking && !isPaused}
-          />
-        </label>
-      </div>
-      <div>
-        <label>
-          Velocidade: {rate.toFixed(2)}
-          <input
-            type="range"
-            min="0.5"
-            max="2"
-            step="0.1"
-            value={rate}
-            onChange={e => setRate(Number(e.target.value))}
-            disabled={isSpeaking && !isPaused}
-          />
-        </label>
-      </div>
-      {phonemes && (
-        <div>
-          <strong>Fonemas:</strong> {phonemes}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default TextToSpeechControl;
+if __name__ == "__main__":
+    texto_digitado = "maria jose silva e joao paulo foram a sao paulo"
+    texto_corrigido = recuperar_acentos(texto_digitado)
+    print("Texto digitado:", texto_digitado)
+    print("Texto com acentos recuperados:", texto_corrigido)
