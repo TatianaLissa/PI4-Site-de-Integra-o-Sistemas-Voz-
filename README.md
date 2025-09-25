@@ -1,39 +1,54 @@
 import spacy
 import pandas as pd
 import unicodedata
+import nltk
 
-# Função para remover acentos da palavra (normalização)
-def remove_acentos(texto):
+# Download dos recursos necessários do NLTK e SpaCy (executar uma vez)
+nltk.download('punkt')
+# Para SpaCy, baixe o modelo português na linha de comando: python -m spacy download pt_core_news_sm
+
+# Função para remover acentos de uma string
+def remover_acentos(texto):
     texto = unicodedata.normalize('NFD', texto)
     texto = ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
     return texto
 
-# Carregar modelo SpaCy para NER
-nlp = spacy.load("pt_core_news_sm")  # modelo em português
+# Carrega modelo SpaCy para português
+nlp = spacy.load("pt_core_news_sm")
 
-# Carregar banco de nomes próprios acentuados em CSV
-# CSV esperado: coluna "nome" com nomes acentuados
-nomes_acentuados_df = pd.read_csv("nomes_acentuados.csv")
-# Criar dicionário para consulta sem acentos -> com acentos
-dicionario_nomes = {remove_acentos(nome.lower()): nome for nome in nomes_acentuados_df["nome"]}
+# Exemplo de criação de um DataFrame Pandas com nomes próprios acentuados
+# Pode-se carregar de arquivo CSV na prática
+dados_nomes = {
+    "nome": [
+        "Maria", "João", "Páulu", "Albértu", "Ãna", "Rafaéu",
+        "Fernãnda", "Lúcas", "Marcélu", "José", "Mariãna", "Carlos",
+        "Beatríz", "Pêdru", "Joãna", "André", "Simõni", "Gabriéu",
+        "Cárla", "Daniéu", " María di Fátima"
+    ]
+}
+df_nomes = pd.DataFrame(dados_nomes)
 
-# Função para recuperar acentos de nomes próprios no texto
-def recuperar_acentos(texto_sem_acentos):
-    doc = nlp(texto_sem_acentos)
+# Criar dicionário para consulta rápida: chave = nome sem acento em minúsculas, valor = nome acentuado
+dicionario_nomes = {
+    remover_acentos(nome.lower()): nome for nome in df_nomes["nome"]
+}
+
+def recuperar_acentos(texto):
+    doc = nlp(texto)
     tokens_corrigidos = []
     for token in doc:
-        palavra = token.text
-        if token.ent_type_ == "PER":  # se for nome próprio identificado
-            chave = remove_acentos(palavra.lower())
-            palavra_com_acentos = dicionario_nomes.get(chave, palavra)
-            tokens_corrigidos.append(palavra_com_acentos)
+        if token.ent_type_ == "PER":  # Entidade do tipo Pessoa
+            chave = remover_acentos(token.text.lower())
+            nome_corrigido = dicionario_nomes.get(chave, token.text)
+            tokens_corrigidos.append(nome_corrigido)
         else:
-            tokens_corrigidos.append(palavra)
+            tokens_corrigidos.append(token.text)
     return " ".join(tokens_corrigidos)
 
-# Exemplo de uso
 if __name__ == "__main__":
-    texto_entrada = "maria jose silva e joao paulo foram a sao paulo"
-    texto_acentuado = recuperar_acentos(texto_entrada)
-    print("Texto original:", texto_entrada)
-    print("Texto com acentos recuperados:", texto_acentuado)
+    texto_digitado = "maria jose silva e joao paulo foram a sao paulo"
+    texto_corrigido = recuperar_acentos(texto_digitado)
+    print("Texto digitado:", texto_digitado)
+    print("Texto com acentos recuperados:", texto_corrigido)
+
+
